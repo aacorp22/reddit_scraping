@@ -48,12 +48,17 @@ def get_data(headers: dict) -> pd.DataFrame:
     data = pd.DataFrame()
     params = {'limit': 100}
 
-    for item in range(22):
+    while(True):
         response = requests.get("https://oauth.reddit.com/r/wallstreetbets/",
                         headers=headers,
                         params=params)
         time.sleep(5)
         info = response.json()
+
+        if len(info['data']['children']) == 0:
+            print('No more posts found')
+            break
+
         for post in info['data']['children']:
             if post['data']['link_flair_text']=='DD':
                 new_df = df_from_response(post)
@@ -65,4 +70,3 @@ def get_data(headers: dict) -> pd.DataFrame:
 
     data = data.drop(columns=['id', 'kind'])
     return data
-    #data.to_excel('data.xlsx')
