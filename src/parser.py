@@ -65,4 +65,3 @@ def get_data(headers: dict) -> pd.DataFrame:
 
     data = data.drop(columns=['id', 'kind'])
     return data
-    #data.to_excel('data.xlsx')
