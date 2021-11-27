@@ -131,3 +131,5 @@ dmypy.json
 # secrets
 *secrets.py
 *.xlsx
+test.py
+*.csv
