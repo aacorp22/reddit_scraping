@@ -1,8 +1,11 @@
 '''file containing parsing functions'''
-from pathlib import Path
 import requests
 import pandas as pd
+from pathlib import Path
 from datetime import datetime
+from json import JSONDecodeError
+from prawcore.exceptions import NotFound
+
 from src.praw_manipulator import get_from_praw, get_comments
 
 
@@ -16,6 +19,9 @@ def make_post_df(post: dict) -> pd.DataFrame:
         pd.DataFrame: parsed data in dataframe form
     """
     df = pd.DataFrame()
+    author_info = get_author_info(post['author'])
+    submission = get_from_praw(post['id'], 'submission')
+    author_created = get_from_praw(post['author_fullname'], 'author')
     try:
         df = df.append({
             'Post Id': post['id'],
@@ -23,35 +29,51 @@ def make_post_df(post: dict) -> pd.DataFrame:
             'Title': post['title'],
             'Body Text': post['selftext'],
             'Author': post['author'],
-            'Comments Number': get_from_praw(post['id'], 'num_comments'),
-            'Upvote Ratio': get_from_praw(post['id'], 'upvote_ratio'),
-            'Ups': get_from_praw(post['id'], 'ups'),
-            'Downs': get_from_praw(post['id'], 'downs'),
-            'Awards':get_from_praw(post['id'], 'total_awards_received'),
-            'Score': get_from_praw(post['id'], 'score'),
+            'Comments Number': submission['comments'],
+            'Upvote Ratio': submission['upvote_ratio'],
+            'Ups': submission['ups'],
+            'Downs': submission['downs'],
+            'Awards':submission['awards'],
+            'Score': submission['score'],
             'Created': datetime.fromtimestamp(post['created_utc'])
-                                    .strftime('%Y-%m-%d'),
-            'Author Id': post['author_fullname']
-            #'Author Total Submissions': get_author_info(post['author_fullname'],'submissions')
-            #'Author Total Comments': get_author_info(post['author_fullname'], 'comments')
-            #'Link': post['url']
+                                    .strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'Author Id': post['author_fullname'],
+            'Author Total Submissions': author_info['submissions'],
+            'Author Total Comments': author_info['comments'],
+            'Author Account Created': datetime.fromtimestamp(author_created['account_created'])
+                                    .strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'Link': post['url']
         }, ignore_index=True)
-    except KeyError:
-        df = df.append({'error':'1'}, ignore_index=True)
+    except (KeyError, NotFound):
+        df = df.append({}, ignore_index=True)
     return df
 
 
-def get_author_info(fullname: str, type_: str) -> int:
+def get_author_info(author: str) -> int:
     """Function to get author's total comments or submissions number
 
     Args:
-        fullname (str): author's fullname
-        type_ (str): comment or submission
+        author (str): author
 
     Returns:
-        int: number
+        int: dictionary
     """
-    pass
+    info = {'comments': 0, 'submmissions': 0}
+    base = 'https://api.pushshift.io/reddit/search/'
+    comments_url = f'{base}comment/?author={author}&metadata=true&size=0'
+    submission_url = f'{base}submission/?author={author}&metadata=true&size=0'
+    sub_request = requests.get(submission_url)
+    com_request = requests.get(comments_url)
+    try:
+        info['submissions'] = sub_request.json()['metadata']['total_results']
+    except JSONDecodeError:
+        print(f'[Error decoding submissions in author info] {sub_request}')
+
+    try:
+        info['comments'] = com_request.json()['metadata']['total_results']
+    except JSONDecodeError:
+        print(f'[Error decoding comments in author info] {com_request}')
+    return info
 
 
 def get_data() -> pd.DataFrame:
@@ -65,31 +87,42 @@ def get_data() -> pd.DataFrame:
     size = 500
     subreddit = 'wallstreetbets'
     before_time = '1h'
-    #count = 1
+    count = 1
     data = pd.DataFrame()
-    for i in range(3):
+    while(True):
         response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
-        info = response.json()['data']
-        if len(info) == 0:
-            print('No more posts found')
-            break
+        if 'data' in response.json():
+            info = response.json()['data']
+            if len(info) == 0 or count == 100:
+                print(f'Finished parsing, posts before tha last found: {len(info)}')
+                break
 
-        for post in info:
-            if 'selftext' in post and\
-                'link_flair_text' in post and\
-                post['link_flair_text']=='DD' and\
-                post['selftext'] != '[removed]':
-                new_df = make_post_df(post)
-                get_comments(post['id'])
-                data = data.append(new_df, ignore_index=True)
-            before_time = post['created_utc']
+            for post in info:
+                if 'selftext' in post and\
+                    'link_flair_text' in post and\
+                    post['link_flair_text']=='DD' and\
+                    post['selftext'] != '[removed]':
+                    new_df = make_post_df(post)
+                    get_comments(post['id'])
+                    if not new_df.empty:
+                        data = data.append(new_df, ignore_index=True)
+                        print(f'[Post {post["id"]}] Parsed')
+                    else:
+                        print(f'[Post {post["id"]}] Partly parsed')
+                before_time = post['created_utc']
 
-        #count+=1
-        #if not count%10:
-        file_path = Path('data.csv')
-        if file_path.exists():
-            data.to_csv(file_path, header=False, mode='a', index=False)
+            count+=1
+            if not count%1:
+                file_path = Path('data.csv')
+                if file_path.exists():
+                    data.to_csv(file_path, header=False, mode='a', index=False)
+                else:
+                    data.to_csv(file_path, header=True, mode='w', index=False)
+                data = pd.DataFrame()
         else:
-            data.to_csv(file_path, header=True, mode='w', index=False)
-        data = pd.DataFrame()
-        #count = 1
+            last_time_from_dataframe = data.tail(1)['Created']
+            with open('READ_ABOUT_ERROR_HERE.txt', 'w') as file:
+                file.write(f'[Last retreived post`s date is {last_time_from_dataframe}]')
+                file.write('\n')
+                file.write(response.status())
+            break
