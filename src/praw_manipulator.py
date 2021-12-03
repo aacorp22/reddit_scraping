@@ -72,7 +72,7 @@ def get_comments(submission_id: str) -> None:
             break
 
         if len(info) == 0:
-            print('[Post {submission_id}] Does not have comments')
+            print(f'[Post {submission_id}] Does not have comments')
             break
 
         for post in info:
@@ -103,3 +103,4 @@ def get_comments(submission_id: str) -> None:
         data.to_csv(file_path, header=False, mode='a', index=False)
     else:
         data.to_csv(file_path, header=True, mode='w', index=False)
+    data = pd.DataFrame()

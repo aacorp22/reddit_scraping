@@ -89,7 +89,7 @@ def get_data() -> pd.DataFrame:
     before_time = '1h'
     count = 1
     data = pd.DataFrame()
-    while(True):
+    while(count!=10):
         response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
         if 'data' in response.json():
             info = response.json()['data']
