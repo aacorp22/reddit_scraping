@@ -1,4 +1,5 @@
 '''file containing parsing functions'''
+import time
 import requests
 import pandas as pd
 from pathlib import Path
@@ -19,10 +20,10 @@ def make_post_df(post: dict) -> pd.DataFrame:
         pd.DataFrame: parsed data in dataframe form
     """
     df = pd.DataFrame()
-    author_info = get_author_info(post['author'])
-    submission = get_from_praw(post['id'], 'submission')
-    author_created = get_from_praw(post['author_fullname'], 'author')
     try:
+        author_info = get_author_info(post['author'])
+        submission = get_from_praw(post['id'], 'submission')
+        author_created = get_from_praw(post['author_fullname'], 'author')
         df = df.append({
             'Post Id': post['id'],
             'Flair Name': post['link_flair_text'],
@@ -35,6 +36,7 @@ def make_post_df(post: dict) -> pd.DataFrame:
             'Downs': submission['downs'],
             'Awards':submission['awards'],
             'Score': submission['score'],
+            'Images': get_images(post),
             'Created': datetime.fromtimestamp(post['created_utc'])
                                     .strftime('%Y-%m-%dT%H:%M:%SZ'),
             'Author Id': post['author_fullname'],
@@ -67,13 +69,52 @@ def get_author_info(author: str) -> int:
     try:
         info['submissions'] = sub_request.json()['metadata']['total_results']
     except JSONDecodeError:
-        print(f'[Error decoding submissions in author info] {sub_request}')
-
+        time.sleep(5)
+        try:
+            info['submissions'] = sub_request.json()['metadata']['total_results']
+        except JSONDecodeError:
+            print(f'[Error decoding submissions in author info] {sub_request}')
     try:
         info['comments'] = com_request.json()['metadata']['total_results']
     except JSONDecodeError:
-        print(f'[Error decoding comments in author info] {com_request}')
+        time.sleep(5)
+        try:
+            info['comments'] = com_request.json()['metadata']['total_results']
+        except JSONDecodeError:
+            print(f'[Error decoding comments in author info] {com_request}')
     return info
+
+
+def data_to_csv(info: pd.DataFrame, path: str) -> None:
+    """Function to export dataframe to csv
+
+    Args:
+        info (pd.DataFrame): dataframe
+        path (str): where to export
+    """
+    file_path = Path(path)
+    if file_path.exists():
+        info.to_csv(file_path, header=False, mode='a', index=False)
+    else:
+        info.to_csv(file_path, header=True, mode='w', index=False)
+
+
+def get_images(post: dict) -> int:
+    """Parse images from post
+
+    Args:
+        post (dict): post to parse
+
+    Returns:
+        int: number of images
+    """
+    images = 0
+    if 'is_gallery' in post\
+        and 'media_metadata' in post:
+        images = len(post['media_metadata'])
+    elif 'preview' in post and 'images' in post['preview']:
+        images = len(post['preview']['images'])
+    return images
 
 
 def get_data() -> pd.DataFrame:
@@ -86,15 +127,34 @@ def get_data() -> pd.DataFrame:
     base = "https://api.pushshift.io/reddit/search/submission/?"
     size = 500
     subreddit = 'wallstreetbets'
-    before_time = '1h'
+    before_time = '1m'
     count = 1
     data = pd.DataFrame()
-    while(count!=10):
+    comment_data = pd.DataFrame()
+    comments_temp = pd.DataFrame()
+    while(True):
         response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
+        print(f'\t\t\t\t\t[Response status code] {response.status_code}')
+        try:
+            response.json()
+        except JSONDecodeError:
+            print(f'[INFO: Too many requests,\
+                system will wait 5 seconds\
+                before the next request]')
+            time.sleep(5)
+            try:
+                response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
+            except JSONDecodeError:
+                print(f'[INFO: Too many requests,\
+                    system will wait 10 seconds\
+                    before the next request]')
+                time.sleep(10)
+                response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
         if 'data' in response.json():
             info = response.json()['data']
-            if len(info) == 0 or count == 100:
-                print(f'Finished parsing, posts before tha last found: {len(info)}')
+            print(f'\t\t\t\t\t[Posts to work with: {len(info)}]')
+            if len(info) == 0:
+                print(f'Finished parsing, more posts found: {len(info)}')
                 break
 
             for post in info:
@@ -103,22 +163,25 @@ def get_data() -> pd.DataFrame:
                     post['link_flair_text']=='DD' and\
                     post['selftext'] != '[removed]':
                     new_df = make_post_df(post)
-                    get_comments(post['id'])
+                    comments_temp =  get_comments(post['id'])
+                    if not comments_temp.empty:
+                        comment_data = comment_data.append(comments_temp,
+                                                    ignore_index=True)
                     if not new_df.empty:
                         data = data.append(new_df, ignore_index=True)
                         print(f'[Post {post["id"]}] Parsed')
                     else:
                         print(f'[Post {post["id"]}] Partly parsed')
-                before_time = post['created_utc']
 
             count+=1
-            if not count%1:
-                file_path = Path('data.csv')
-                if file_path.exists():
-                    data.to_csv(file_path, header=False, mode='a', index=False)
-                else:
-                    data.to_csv(file_path, header=True, mode='w', index=False)
+            if not count%10:
+                data.drop_duplicates(subset=['Title'])
+                data_to_csv(data, 'submissions.csv')
+                print(f'\t\t\t\t[Exported {len(data)} posts to excel]')
                 data = pd.DataFrame()
+                data_to_csv(comment_data, 'comments.csv')
+                print(f'\t\t\t\t[Exported {len(comment_data)} comments to excel]')
+                comment_data = pd.DataFrame()
         else:
             last_time_from_dataframe = data.tail(1)['Created']
             with open('READ_ABOUT_ERROR_HERE.txt', 'w') as file:
@@ -126,3 +189,5 @@ def get_data() -> pd.DataFrame:
                 file.write('\n')
                 file.write(response.status())
             break
+
+        before_time = info[-1]['created_utc']

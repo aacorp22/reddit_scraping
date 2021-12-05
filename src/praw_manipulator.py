@@ -28,8 +28,8 @@ def get_from_praw(id_: str, type_: str) -> int:
     """
     info = {}
     if type_ == 'submission':
-        submission = reddit.submission(id_)
         try:
+            submission = reddit.submission(id_)
             info = {'comments': submission.num_comments,
                     'upvote_ratio': submission.upvote_ratio,
                     'ups': submission.ups,
@@ -63,13 +63,15 @@ def get_comments(submission_id: str) -> None:
     data = pd.DataFrame()
     while(True):
         response = requests.get(f"{base}link_id={submission_id}&subreddit=wallstreetbets")
-        if response.status_code == 429:
-            time.sleep(1)
         try:
             info = response.json()['data']
         except JSONDecodeError as err:
-            print(f'[Post {submission_id}] {err} {response.status_code}')
-            break
+            time.sleep(5)
+            try:
+                info = response.json()['data']
+            except JSONDecodeError as err:
+                print(f'[Post {submission_id}] {err} {response.status_code}')
+                break
 
         if len(info) == 0:
             print(f'[Post {submission_id}] Does not have comments')
@@ -98,9 +100,4 @@ def get_comments(submission_id: str) -> None:
         if len(info) < 500:
             break
 
-    file_path = Path('comments.csv')
-    if file_path.exists():
-        data.to_csv(file_path, header=False, mode='a', index=False)
-    else:
-        data.to_csv(file_path, header=True, mode='w', index=False)
-    data = pd.DataFrame()
+    return data
