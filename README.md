@@ -11,8 +11,8 @@ After installing dependencies create *src/secrets.py* file
 There you should provide your username, password, client id and client secret for the script to run correctly. Example of secrets.py file is in src folder, just put your own creds there and rename it.
 To get client secret and client id, just go to https://www.reddit.com/prefs/apps and create your own app
 
-Run
+After completing these steps run:
 
-> python main.py
+> python -u main.py
 
-in your console, this will create an excel file, containing parsed data.
+in your console, this will create excel files, containing parsed data.
