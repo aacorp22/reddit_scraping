@@ -3,16 +3,13 @@ Python script to make some data scraping for a research project
 
 Script parses data from subreddit https://www.reddit.com/r/wallstreetbets
 
-Dependencies are installed by
+Run script by shell command:
 
-> pip install -r requirements.txt
+> source run.sh
 
-After installing dependencies create *src/secrets.py* file
-There you should provide your username, password, client id and client secret for the script to run correctly. Example of secrets.py file is in src folder, just put your own creds there and rename it.
-To get client secret and client id, just go to https://www.reddit.com/prefs/apps and create your own app
+System will cleate virtual environment, install required dependencies and run the script.
 
-Run
-
-> python main.py
-
-in your console, this will create an excel file, containing parsed data.
+In *src/config/config.yml* you should provide your reddit username, password, client id and client secret for the script to run correctly. To get client secret and client id, just go to https://www.reddit.com/prefs/apps and create your own app.
+More about authentication:
+- https://github.com/reddit-archive/reddit/wiki/OAuth2-Quick-Start-Example#first-steps
+- https://praw.readthedocs.io/en/stable/getting_started/authentication.html

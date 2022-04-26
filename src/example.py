@@ -1,5 +1,0 @@
-'''example file for keeping secrets'''
-CLIENT_ID = 'your_client_id'
-CLIENT_SECRET = 'your_secret'
-USERNAME = 'username'
-PASSWORD = 'password'
