@@ -103,8 +103,13 @@ def get_author_info(author: str) -> int:
     wallstreet_comments = f'{base}comment/?author={author}&subreddit=wallstreetbets&metadata=true&size=0'
     wallstreet_submissions = f'{base}submission/?author={author}&subreddit=wallstreetbets&metadata=true&size=0'
 
+
     try:
+        sub_request = requests.get(submission_url)
+        time.sleep(1)
+        wallstreet_subm_request = requests.get(wallstreet_submissions)
         info['all_submissions'] = sub_request.json()['metadata']['total_results']
+        time.sleep(1)
         info['wallstreet_submissions'] = wallstreet_subm_request.json()['metadata']['total_results']
     except JSONDecodeError:
         time.sleep(1)
@@ -120,12 +125,12 @@ def get_author_info(author: str) -> int:
                 logging.warning(f'[Error 504 decoding submissions in author info, need cooldown]')
             else:
                 logging.warning(f'[Error decoding submissions in author info] {err}')
-            time.sleep(10)
+            time.sleep(5)
 
     try:
         com_request = requests.get(comments_url)
         info['all_comments'] = com_request.json()['metadata']['total_results']
-        time.sleep(2)
+        time.sleep(1)
         wallstreet_comm_request = requests.get(wallstreet_comments)
         info['wallstreet_comments'] = wallstreet_comm_request.json()['metadata']['total_results']
     except JSONDecodeError:
@@ -134,7 +139,7 @@ def get_author_info(author: str) -> int:
         try:
             com_request = requests.get(comments_url)
             info['all_comments'] = com_request.json()['metadata']['total_results']
-            time.sleep(5)
+            time.sleep(2)
             wallstreet_comm_request = requests.get(wallstreet_comments)
             info['wallstreet_comments'] = wallstreet_comm_request.json()['metadata']['total_results']
         except Exception as err:
@@ -142,7 +147,7 @@ def get_author_info(author: str) -> int:
                 logging.warning(f'[Error 504 decoding comments in author info, need cooldown]')
             else:
                 logging.warning(f'[Error decoding comments in author info] {err}')
-            time.sleep(10)
+            time.sleep(5)
 
     return info
 
