@@ -128,7 +128,7 @@ def get_author_info(author: str) -> int:
                 logging.warning(f'[Error 504 decoding submissions in author info, need cooldown]')
             else:
                 logging.warning(f'[Error decoding submissions in author info] {err}')
-            time.sleep(2)
+            time.sleep(10)
 
     try:
         com_request = requests.get(comments_url)
@@ -150,7 +150,7 @@ def get_author_info(author: str) -> int:
                 logging.warning(f'[Error 504 decoding comments in author info, need cooldown]')
             else:
                 logging.warning(f'[Error decoding comments in author info] {err}')
-            time.sleep(2)
+            time.sleep(10)
 
     return info
 
