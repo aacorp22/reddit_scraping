@@ -7,7 +7,7 @@ import pandas as pd
 from datetime import datetime
 from json import JSONDecodeError
 
-from src.config.config_reader import read_config
+from config.config_reader import read_config
 
 
 CONFIG = read_config()

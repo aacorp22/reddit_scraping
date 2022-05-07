@@ -1,6 +1,4 @@
-rm -r env/
+module load anaconda
 python3 -m venv env
-source env/bin/activate
-env/bin/python3 -m pip install -r requirements.txt
-env/bin/python3 main.py
-deactivate
+conda create --name py38 python=3.8
+conda activate py38
