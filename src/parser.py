@@ -1,5 +1,7 @@
 '''file containing parsing functions'''
 import time
+from urllib import response
+from wsgiref.util import request_uri
 import requests
 import warnings
 import logging
@@ -11,7 +13,7 @@ from json import JSONDecodeError
 from prawcore.exceptions import NotFound
 
 from src.praw_manipulator import get_from_praw, get_comments
-from src.config.config_reader import read_config
+from config.config_reader import read_config
 
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -103,24 +105,21 @@ def get_author_info(author: str) -> int:
     wallstreet_comments = f'{base}comment/?author={author}&subreddit=wallstreetbets&metadata=true&size=0'
     wallstreet_submissions = f'{base}submission/?author={author}&subreddit=wallstreetbets&metadata=true&size=0'
 
-    sub_request = requests.get(submission_url)
-    time.sleep(0.5)
-    com_request = requests.get(comments_url)
-    time.sleep(0.5)
-    wallstreet_comm_request = requests.get(wallstreet_comments)
-    time.sleep(0.5)
-    wallstreet_subm_request = requests.get(wallstreet_submissions)
 
     try:
+        sub_request = requests.get(submission_url)
+        time.sleep(1.5)
+        wallstreet_subm_request = requests.get(wallstreet_submissions)
         info['all_submissions'] = sub_request.json()['metadata']['total_results']
+        time.sleep(1.5)
         info['wallstreet_submissions'] = wallstreet_subm_request.json()['metadata']['total_results']
     except JSONDecodeError:
-        time.sleep(1)
+        time.sleep(2)
 
         try:
             sub_request = requests.get(submission_url)
             info['all_submissions'] = sub_request.json()['metadata']['total_results']
-            time.sleep(1)
+            time.sleep(3)
             wallstreet_subm_request = requests.get(wallstreet_submissions)
             info['wallstreet_submissions'] = wallstreet_subm_request.json()['metadata']['total_results']
         except Exception as err:
@@ -128,21 +127,21 @@ def get_author_info(author: str) -> int:
                 logging.warning(f'[Error 504 decoding submissions in author info, need cooldown]')
             else:
                 logging.warning(f'[Error decoding submissions in author info] {err}')
-            time.sleep(2)
+            time.sleep(5)
 
     try:
         com_request = requests.get(comments_url)
         info['all_comments'] = com_request.json()['metadata']['total_results']
-        time.sleep(1)
+        time.sleep(1.5)
         wallstreet_comm_request = requests.get(wallstreet_comments)
         info['wallstreet_comments'] = wallstreet_comm_request.json()['metadata']['total_results']
     except JSONDecodeError:
-        time.sleep(1)
+        time.sleep(1.5)
 
         try:
             com_request = requests.get(comments_url)
             info['all_comments'] = com_request.json()['metadata']['total_results']
-            time.sleep(1)
+            time.sleep(3)
             wallstreet_comm_request = requests.get(wallstreet_comments)
             info['wallstreet_comments'] = wallstreet_comm_request.json()['metadata']['total_results']
         except Exception as err:
@@ -150,7 +149,7 @@ def get_author_info(author: str) -> int:
                 logging.warning(f'[Error 504 decoding comments in author info, need cooldown]')
             else:
                 logging.warning(f'[Error decoding comments in author info] {err}')
-            time.sleep(2)
+            time.sleep(5)
 
     return info
 
@@ -191,6 +190,21 @@ def get_df_tail(filename: str, lines_number: int):
     return df.tail(lines_number).to_dict()
 
 
+def make_recursive_requests(link: str, cooldown_timer: int) -> str:
+    """get request link and return json"""
+    try:
+        response = requests.get(link)
+        logging.info(f'\t\t\t\t\t[Response status code] {response.status_code}')
+        data = response.json()
+    except JSONDecodeError:
+        logging.info("Too many requests,"
+                     f" system will wait {cooldown_timer} seconds"
+                     " before the next request")
+        time.sleep(cooldown_timer)
+        data = make_recursive_requests(link, cooldown_timer+5)
+    return data
+
+
 def get_all_data() -> pd.DataFrame:
     """Function to get posts from reddit,
         parse it and return a dataframe
@@ -219,28 +233,11 @@ def get_all_data() -> pd.DataFrame:
     begin_time = datetime.now()
 
     while True:
-        response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
-        time.sleep(0.1)
-        logging.info(f'\t\t\t\t\t[Response status code] {response.status_code}')
+        request_url = f"{base}size={size}&subreddit={subreddit}&before={before_time}"
+        response_data = make_recursive_requests(request_url, 5)
 
-        try:
-            response.json()
-        except JSONDecodeError:
-            logging.info("Too many requests,"
-                            " system will wait 5 seconds"
-                            " before the next request")
-            time.sleep(5)
-
-            try:
-                response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
-            except JSONDecodeError:
-                logging.info("Too many requests,"
-                            " system will wait 10 seconds"
-                            " before the next request")
-                response = requests.get(f"{base}size={size}&subreddit={subreddit}&before={before_time}")
-
-        if 'data' in response.json():
-            info = response.json()['data']
+        if 'data' in response_data:
+            info = response_data['data']
             logging.info(f'\t\t\t\t\t[Posts to work with: {len(info)}]')
 
             if len(info) == 0:

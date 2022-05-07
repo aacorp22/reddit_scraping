@@ -129,6 +129,6 @@ dmypy.json
 .pyre/
 
 # secrets
-*config_my.yml
+*secret.yml
 *.xlsx
 *.csv
