@@ -1,4 +1,5 @@
 """praw manipulator"""
+from typing import Any
 import praw
 import time
 import logging
@@ -21,6 +22,47 @@ reddit = praw.Reddit(
 )
 
 
+def make_recursive_requests(link: str, cooldown_timer: int, type_: str) -> str:
+    """get request link and return json"""
+    try:
+        response = requests.get(link)
+        if type_ == "posts":
+            logging.info(f'\t\t\t\t\t[Response status code {type_}] {response.status_code}')
+        data = response.json()
+    except requests.RequestException:
+        logging.error(f"Connection error in {link}, system will wait 30 sec")
+        time.sleep(5)
+        data = make_recursive_requests(link, cooldown_timer+5, type_)
+    except JSONDecodeError:
+        logging.info(f"Too many requests in {type_},"
+                     f" system will wait {cooldown_timer} seconds"
+                     " before the next request")
+        time.sleep(cooldown_timer)
+        data = make_recursive_requests(link, cooldown_timer+5, type_)
+    return data
+
+
+def make_recursive_for_author(link: str, cooldown_timer: int) -> Any:
+    """get request link and return response"""
+    try:
+        response = requests.get(link)
+    except requests.RequestException:
+        logging.error(f"Connection error in get_author, system will wait 30 sec")
+        time.sleep(5)
+        response = make_recursive_for_author(link, cooldown_timer+5)
+
+    try:
+        response.json()
+    except JSONDecodeError:
+        logging.info("Too many requests in author_info,"
+                     f" system will wait {cooldown_timer} seconds"
+                     " before the next request")
+        time.sleep(cooldown_timer)
+        response = make_recursive_for_author(link, cooldown_timer+5)
+
+    return response
+
+
 def get_from_praw(id_: str, type_: str) -> dict:
     """func to make requests with praw api to get post, comment or author info
 
@@ -32,42 +74,47 @@ def get_from_praw(id_: str, type_: str) -> dict:
         dict: object data
     """
     info = {}
-    if type_ == "submission":
-        try:
-            submission = reddit.submission(id_)
-            info = {"comments": submission.num_comments,
-                    "upvote_ratio": submission.upvote_ratio,
-                    "ups": submission.ups,
-                    "downs": submission.downs,
-                    "awards": submission.total_awards_received,
-                    "score": submission.score,
-                    "selftext": submission.selftext,
-                    "edited": submission.edited,
-                    "title": submission.title}
-        except Exception as error:
-            logging.warning(f'[Post {id_}] Could not get post info from praw {error}')
-            info = {"comments": 0,
-                    "upvote_ratio": 0.0,
-                    "ups": 0,
-                    "downs": 0,
-                    "awards": 0,
-                    "score": 0}
-    elif type_ == "comment":
-        try:
-            comment = reddit.comment(id_)
-            info = {"ups": comment.ups,
-                    "downs": comment.downs,
-                    "awards": comment.total_awards_received,
-                    "score": comment.score,
-                    "link": f"https://reddit.com{comment.permalink}"}
-        except Exception as error:
-            logging.warning(f'[Comment {id_}] Could not get comment data from praw {error}')
-    elif type_ == "author":
-        try:
-            user = reddit.redditor(fullname=id_)
-            info["account_created"] = user.created_utc
-        except Exception as error:
-            logging.warning(f'[Author {id_}] Could not get account creation date {error}')
+    try:
+        if type_ == "submission":
+            try:
+                submission = reddit.submission(id_)
+                info = {"comments": submission.num_comments,
+                        "upvote_ratio": submission.upvote_ratio,
+                        "ups": submission.ups,
+                        "downs": submission.downs,
+                        "awards": submission.total_awards_received,
+                        "score": submission.score,
+                        "selftext": submission.selftext,
+                        "edited": submission.edited,
+                        "title": submission.title}
+            except Exception as error:
+                logging.warning(f'[Post {id_}] Could not get post info from praw {error}')
+                info = {"comments": 0,
+                        "upvote_ratio": 0.0,
+                        "ups": 0,
+                        "downs": 0,
+                        "awards": 0,
+                        "score": 0}
+        elif type_ == "comment":
+            try:
+                comment = reddit.comment(id_)
+                info = {"ups": comment.ups,
+                        "downs": comment.downs,
+                        "awards": comment.total_awards_received,
+                        "score": comment.score,
+                        "link": f"https://reddit.com{comment.permalink}"}
+            except Exception as error:
+                logging.warning(f'[Comment {id_}] Could not get comment data from praw {error}')
+        elif type_ == "author":
+            try:
+                user = reddit.redditor(fullname=id_)
+                info["account_created"] = user.created_utc
+            except Exception as error:
+                logging.warning(f'[Author {id_}] Could not get account creation date {error}')
+    except requests.RequestException:
+        logging.error("Connection Error in get_from_praw, waiting for 6 seconds...")
+        time.sleep(6)
+        info = get_from_praw(id_, type_)
 
     return info
 
@@ -80,17 +127,16 @@ def get_comments(submission_id: str) -> None:
     """
     base = "https://api.pushshift.io/reddit/comment/search/?"
     data = pd.DataFrame()
+    print("parsing comments")
+    time.sleep(2)
     while True:
-        response = requests.get(f'{base}link_id={submission_id}&subreddit=wallstreetbets')
         try:
-            info = response.json()["data"]
-        except JSONDecodeError as err:
-            time.sleep(5)
-            try:
-                info = response.json()["data"]
-            except JSONDecodeError as err:
-                logging.warning(f'[Post {submission_id}] {err} {response.status_code}')
-                break
+            requests_link = f'{base}link_id={submission_id}&subreddit=wallstreetbets'
+            response = make_recursive_requests(requests_link, 5, "comments")
+            info = response["data"]
+        except:
+            logging.warning(f'[Post {submission_id}] {response}')
+            break
 
         if len(info) == 0:
             logging.info(f'[Post {submission_id}] Does not have comments')
@@ -115,7 +161,7 @@ def get_comments(submission_id: str) -> None:
                         "Author Fullname":post["author_fullname"],
                         "Submission Id": submission_id,
                         "Created": datetime.fromtimestamp(post["created_utc"])
-                                           .strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                        .strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "Link": comment["link"]},
                         ignore_index=True)
             except KeyError as error:
