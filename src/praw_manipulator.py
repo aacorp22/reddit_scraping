@@ -22,6 +22,11 @@ reddit = praw.Reddit(
 )
 
 
+def base36_to_10(in_str: str) -> int:
+    """https://www.reddit.com/r/pushshift/comments/11uc4cz/getting_comments_from_submission_id/"""
+    return int(in_str, 36)
+
+
 def make_recursive_requests(link: str, cooldown_timer: int, type_: str) -> str:
     """get request link and return json"""
     try:
@@ -129,9 +134,10 @@ def get_comments(submission_id: str) -> None:
     data = pd.DataFrame()
     print("parsing comments")
     time.sleep(2)
+    sub_id = base36_to_10(submission_id)
     while True:
         try:
-            requests_link = f'{base}link_id={submission_id}&subreddit=wallstreetbets'
+            requests_link = f'{base}link_id={sub_id}&subreddit=wallstreetbets'
             response = make_recursive_requests(requests_link, 5, "comments")
             info = response["data"]
         except:

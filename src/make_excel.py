@@ -7,10 +7,10 @@ def make_excel() -> None:
     """
     try:
         logging.info("Formatting csv to xlsx...")
-        comments = pd.read_csv('comments.csv')
+        # comments = pd.read_csv('comments.csv')
         posts = pd.read_csv('submissions.csv')
 
-        comments.to_excel('comments.xlsx')
+        # comments.to_excel('comments.xlsx')
         posts.to_excel('submissions.xlsx')
         logging.info("Format to excel succeded!")
     except FileNotFoundError:

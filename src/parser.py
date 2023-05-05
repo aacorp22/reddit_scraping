@@ -97,34 +97,28 @@ def get_author_info(author: str) -> int:
             'wallstreet_comments': 0, 'wallstreet_submissions': 0}
 
     base = 'https://api.pushshift.io/reddit/search/'
-    comments_url = f'{base}comment/?author={author}&metadata=true&size=0'
-    submission_url = f'{base}submission/?author={author}&metadata=true&size=0'
-    wallstreet_comments = f'{base}comment/?author={author}&subreddit=wallstreetbets&metadata=true&size=0'
-    wallstreet_submissions = f'{base}submission/?author={author}&subreddit=wallstreetbets&metadata=true&size=0'
+    comments_url = f'{base}comment/?author={author}&metadata=true&size=1'
+    submission_url = f'{base}submission/?author={author}&metadata=true&size=1'
+    wallstreet_comments = f'{base}comment/?author={author}&subreddit=wallstreetbets&metadata=true&size=1'
+    wallstreet_submissions = f'{base}submission/?author={author}&subreddit=wallstreetbets&metadata=true&size=1'
     try:
         sub_request = make_recursive_for_author(submission_url, 5)
-        info['all_submissions'] = sub_request.json()['metadata']['total_results']
+        info['all_submissions'] = sub_request.json()['metadata']['es']['hits']['total']['value']
         time.sleep(1.2)
         wallstreet_subm_request = make_recursive_for_author(wallstreet_submissions, 5)
-        info['wallstreet_submissions'] = wallstreet_subm_request.json()['metadata']['total_results']
+        info['wallstreet_submissions'] = wallstreet_subm_request.json()['metadata']['es']['hits']['total']['value']
     except Exception as err:
-        if 504 in (sub_request.status_code, wallstreet_subm_request.status_code):
-            logging.warning(f'[Error 504 decoding submissions in author info, need cooldown]')
-        else:
-            logging.warning(f'[Error decoding submissions in author info] {err}')
+        logging.warning(f'[Error decoding submissions in author info] {err}')
         time.sleep(2.2)
 
     try:
         com_request = make_recursive_for_author(comments_url, 5)
-        info['all_comments'] = com_request.json()['metadata']['total_results']
+        info['all_comments'] = com_request.json()['metadata']['es']['hits']['total']['value']
         time.sleep(1.2)
         wallstreet_comm_request = make_recursive_for_author(wallstreet_comments, 5)
-        info['wallstreet_comments'] = wallstreet_comm_request.json()['metadata']['total_results']
+        info['wallstreet_comments'] = wallstreet_comm_request.json()['metadata']['es']['hits']['total']['value']
     except Exception as err:
-        if 504 in (com_request.status_code, wallstreet_comm_request.status_code):
-            logging.warning(f'[Error 504 decoding comments in author info, need cooldown]')
-        else:
-            logging.warning(f'[Error decoding comments in author info] {err}')
+        logging.warning(f'[Error decoding comments in author info] {err}')
         time.sleep(2.2)
 
     return info
@@ -213,6 +207,7 @@ def get_all_data() -> pd.DataFrame:
                             post['link_flair_text']=='DD' and\
                             post['selftext'] != '[removed]':
                     print(post['id'])
+
                     if post['created_utc'] < 1650965272:
                         print(post['created_utc'])
                         print("older posts coming")
